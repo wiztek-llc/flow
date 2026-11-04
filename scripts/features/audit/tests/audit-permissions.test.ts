@@ -15,8 +15,8 @@ import { project, run } from '../../../shared/testing.ts';
 
 const GUARD = 'Writes into ~/.claude/settings.json, which could switch the guard off';
 const DELETE = 'Deletes 14 files git cannot restore, under src/old';
-const PUSH = 'Pushes 3 commits to origin/main';
-const SAVE = 'Stages everything, commits it and pushes.';
+const PUSH = 'Force-pushes 3 commits to origin/main';
+const SAVE = 'Publishes shop@1.2.0 to npm';
 
 const line = (at, where, session, source, headline, answer, rule: string | null = null) => JSON.stringify({
   at, project: where, session, agent: 'main', tool: 'Bash', source, headline,
@@ -40,18 +40,18 @@ const permissions = (env, args: string[] = []) => run('flow.ts', ['audit', 'perm
 const both = () => roots('audit-permissions', {
   // The laptop's first month.
   '2026-09.jsonl': [
-    line('2026-09-30T08:00:00Z', 'flow-dev', '17da95cd', 'rule', SAVE, 'allow', 'Bash(util git save *)'),
+    line('2026-09-30T08:00:00Z', 'flow-dev', '17da95cd', 'rule', SAVE, 'allow', 'Bash(npm publish *)'),
     line('2026-09-30T08:05:00Z', 'flow-dev', '17da95cd', 'core', 'Writes .claude/skills/x/SKILL.md', 'auto-allow'),
   ],
   // After the sync: the laptop's new lines, a conflict marker, then the PC's
   // lines, which are older than the laptop's and were added last.
   '2026-10.jsonl': [
-    line('2026-10-13T10:00:00Z', 'flow-dev', '17da95cd', 'rule', PUSH, 'allow', 'Bash(git push *)'),
+    line('2026-10-13T10:00:00Z', 'flow-dev', '17da95cd', 'rule', PUSH, 'allow', 'Bash(git push --force*)'),
     line('2026-10-13T10:01:00Z', 'flow-dev', '17da95cd', 'core', 'Writes .claude/skills/x/SKILL.md', 'auto-allow'),
     line('2026-10-13T10:02:00Z', 'flow-dev', '17da95cd', 'guard', DELETE, 'refuse'),
     line('2026-10-13T10:03:00Z', 'flow-dev', '17da95cd', 'guard', DELETE, 'note'),
     '<<<<<<< HEAD',
-    line('2026-10-12T09:00:00Z', 'shop', 'aa11bb22', 'rule', PUSH, 'allow', 'Bash(git push *)'),
+    line('2026-10-12T09:00:00Z', 'shop', 'aa11bb22', 'rule', PUSH, 'allow', 'Bash(git push --force*)'),
     line('2026-10-12T09:10:00Z', 'shop', 'aa11bb22', 'guard', GUARD, 'refuse'),
   ],
 });
@@ -166,7 +166,7 @@ test('a session with no lines prints that plainly', () => {
 test('a build with only a push ask meets the target', () => {
   const env = roots('audit-permissions-clean', {
     '2026-10.jsonl': [
-      line('2026-10-13T10:00:00Z', 'shop', 'aa11bb22', 'rule', PUSH, 'allow', 'Bash(git push *)'),
+      line('2026-10-13T10:00:00Z', 'shop', 'aa11bb22', 'rule', PUSH, 'allow', 'Bash(git push --force*)'),
       line('2026-10-13T10:01:00Z', 'shop', 'aa11bb22', 'core', 'Writes .claude/skills/x/SKILL.md', 'auto-allow'),
     ],
   });

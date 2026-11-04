@@ -61,7 +61,7 @@ function refuseWhileUnfinished(t: Ticket, root: string, status: string) {
   const folder = find(t, root)!.folder;
   throw new FlowError(
     `${t.id}'s worktree ${folder} holds ${held.join(' and ')}.\n` +
-    `  The user merges it with util git save -w (~/.flow/references/guides/worktrees.md), or throws it away, then run ${status === 'done' ? 'done' : 'drop'} again.`
+    `  Merge it (~/.flow/references/guides/worktrees.md → Merging by hand), or throw it away, then run ${status === 'done' ? 'done' : 'drop'} again.`
   );
 }
 

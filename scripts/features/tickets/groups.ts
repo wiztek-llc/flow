@@ -19,6 +19,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as frontmatter from '../../shared/frontmatter.ts';
+import * as paths from '../../shared/paths.ts';
+import * as receiveOnly from '../machine/receive-only.ts';
 import { toRank } from './fields.ts';
 import type { Ticket } from './types.ts';
 
@@ -69,8 +71,13 @@ function readGroups(records: string): Group[] {
   return [...found.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** Writes the card, making `.flow/groups/` where it is missing. A built-in group gets its file here. */
+/**
+ * Writes the card, making `.flow/groups/` where it is missing. A built-in
+ * group gets its file here. Refused in a project this machine only receives
+ * (features/machine/receive-only.ts).
+ */
 function writeGroup(g: Group) {
+  receiveOnly.refuse(paths.folders(), g.file);
   fs.mkdirSync(path.dirname(g.file), { recursive: true });
   fs.writeFileSync(g.file, frontmatter.stringify(g.data, CARD_KEYS, g.body));
   g.builtIn = false;

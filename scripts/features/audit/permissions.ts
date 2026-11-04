@@ -5,8 +5,8 @@
  * Flow's mod appends to, and never the transcript index. A line holds the
  * source of an ask (`guard`, `rule`, `core`), its headline, and the answer.
  *
- * The target is zero asks in a normal ticket build apart from push and
- * publish. Those are the asks the shipped `permissions.ask` rules raise,
+ * The target is zero asks in a normal ticket build apart from a force push
+ * and a publish. Those are the asks the shipped `permissions.ask` rules raise,
  * read from `home/settings.json` so the list lives once.
  */
 
@@ -61,7 +61,7 @@ function matches(entry, { id, project, since, until }) {
   return true;
 }
 
-/** The rules that ask before a push, a save (which pushes) and a publish. */
+/** The rules that ask before a force push and a publish. */
 const targetRules = () =>
   (settings.read(path.join(paths.cloneRoot(), 'home', 'settings.json')).permissions || {}).ask || [];
 

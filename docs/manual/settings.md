@@ -212,7 +212,7 @@ Hooks are scripts Claude Code runs at a fixed moment, such as before every shell
   "defaultMode": "acceptEdits",
   "disableBypassPermissionsMode": "disable",
   "allow": ["Edit", "Edit(//**/.flow/**)", "Read", "WebFetch", "WebSearch", "Bash", "Monitor"],
-  "ask": ["Bash(git push *)", "Bash(util git save *)", "Bash(npm publish *)",
+  "ask": ["Bash(git push --force*)", "Bash(git push -f *)", "…", "Bash(npm publish *)",
           "Bash(pnpm publish *)", "Bash(yarn publish *)", "Bash(cargo publish *)"],
   "deny": ["…"],
   "additionalDirectories": ["~/.flow"]
@@ -222,7 +222,7 @@ Hooks are scripts Claude Code runs at a fixed moment, such as before every shell
 - **`defaultMode`**: every session starts in Accept edits, in every project. In Manual, Claude Code asked before writes inside the project despite the `Edit` allow.
 - **`disableBypassPermissionsMode`**: the mode that skips every question can never be switched on.
 - **`allow`**: every edit, read, web fetch, web search, shell command and `Monitor` wait runs without asking. The guard and the `ask` rules are what stop a harmful one.
-- **`ask`**: a push, a publish or `util git save` (which pushes) always asks, since each puts work where other people see it. A plain `git commit` runs. Delete a line to let that command run unasked.
+- **`ask`**: a force push and a package publish always ask. A force push overwrites commits on the remote, and a publish can't be taken back. A plain `git push`, `git commit` and `util git save` run unasked, since closing a ticket commits and pushes its work. Delete a line to let that command run unasked.
 - **`deny`**: never runs, in any mode:
   - Claude Code tools Flow replaces or never uses, such as plan mode and scheduled jobs. Each one left out also saves the tokens its description costs.
   - Reading `~/.ssh` and `~/.aws`, the folders holding your keys.
@@ -265,10 +265,17 @@ Claude Code's switch for one skill, set to `off` for a skill synced from your Cl
 
 A skill you keep takes `"on"`. [`flow doctor`](commands.md#flow-doctor) names every synced skill with no entry, since a skill synced after setup loads in every session until one decides it.
 
+### Remote Control stays on
+
+```json
+"disableRemoteControl": false
+```
+
+Lets you drive a session on this computer from claude.ai/code or the Claude app. The session still runs here, so Flow's hooks, the guard and `~/.flow` all keep working. The band, the meters and the Restart button are drawn in the terminal, so the phone doesn't show them. Start it with `claude --remote-control`, or `/rc` in a session that's already open. It needs a claude.ai sign-in. Switched on 2026-10-30: nothing in Flow clashes with it.
+
 ### Features switched off
 
 - **`disableBundledSkills`**: Claude Code's own skills, so only Flow's load.
-- **`disableRemoteControl`**: driving a session from claude.ai or your phone.
 - **`disableClaudeAiConnectors`**: claude.ai's connectors.
 - **`idleCompaction`**: set to `false`. Claude Code's own summary of a long conversation left idle for about an hour. A summary loses what you said, and Flow's [restart](#wrapup) carries it word for word.
 - **`feedbackSurveyRate: 0`**: Claude Code's feedback survey prompt.

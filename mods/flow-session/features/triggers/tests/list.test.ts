@@ -208,3 +208,21 @@ describe('agent', () => {
     ])).toEqual(new Set(['read:references/guides/subagents.md']))
   })
 })
+
+describe('close', () => {
+  test('a ticket close is held back until commit-on-close.md is read', () => {
+    for (const command of ['flow tickets done hustle-12', 'cd ~/hustle && flow tickets done 12 --json']) {
+      expect(entryFor(bash(command))?.id).toBe('close')
+      const plan = planFor([bash(command)], new Set())
+      expect(plan.held).toEqual([0])
+      expect(sent(plan)).toEqual(['references/guides/commit-on-close.md'])
+      expect(plan.added[0]!.header).toBe(`${HEADER} Your Bash (${command}) was held back, so it did not run. Read this guide, then make it again.`)
+    }
+  })
+
+  test('other ticket commands, and a window holding the guide, run', () => {
+    expect(entryFor(bash('flow tickets drop hustle-12 --reason x'))?.id).not.toBe('close')
+    expect(entryFor(bash('echo "flow tickets donee"'))?.id).not.toBe('close')
+    expect(planFor([bash('flow tickets done hustle-12')], new Set(['read:references/guides/commit-on-close.md']))).toEqual({ held: [], added: [], notes: new Map() })
+  })
+})

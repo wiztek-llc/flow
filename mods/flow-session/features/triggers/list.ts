@@ -146,6 +146,14 @@ export const TRIGGERS: readonly Trigger[] = [
     holds: true,
   },
   {
+    id: 'close',
+    on: 'response',
+    when: (call) => /(?:^|[\s;&|(`])flow\s+tickets\s+done\b/.test(commandOf(call)),
+    send: () => guides('commit-on-close.md'),
+    why: () => 'Before closing a ticket, commit and push its work by this guide.',
+    holds: true,
+  },
+  {
     id: 'rule-file',
     on: 'response',
     when: (call) => markdown(call) && (/\/CLAUDE(\.local)?\.md$/.test(pathOf(call)) || /\/\.claude\/rules\//.test(pathOf(call))),

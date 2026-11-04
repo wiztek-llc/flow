@@ -169,6 +169,18 @@ It runs by itself when a session ends, and every 30 minutes while you work, so y
 
 **A change other computers must see early syncs at once**, in the background: a new ticket, a status move, a drop, a move, `flow tickets rank` and `flow init`. A finding or a note waits for the next 30-minute sync, so 200 edits in a row send once. Only one sync of a place runs at a time. A sync asked for meanwhile runs right after it.
 
+On a computer whose record lists a project under `receiveOnly` ([Files](files.md) → `~/.flow/`), an edit made in that project's tickets is never sent. The sync moves it to `git stash`, so the tickets come down as the writing computer sent them, and names each file:
+
+```console
+$ flow sync
+came down: 1 file
+nothing changed here, so nothing went up.
+never sent, and set aside in git stash in ~/.flow, since this machine only receives them:
+  projects/shop/tickets/1/ticket.md
+```
+
+`git -C ~/.flow stash show -p` shows the edit.
+
 ## The board
 
 A ticket is one piece of work, kept as a folder in the project's `.flow/tickets/`. Its status is `todo`, `in-progress`, `done`, `parked` or `dropped`, and its labels name the kind of work.
@@ -676,7 +688,7 @@ now ready:
   shop-3-csv-export  todo    feature,v1  -
 ```
 
-**A ticket is built in the main checkout.** Its uncommitted changes show in your editor's Source Control list like any other change, and the agent commits nothing and pushes nothing. You review the changes and run `util git save`. `flow tickets start` makes no second copy of the code.
+**A ticket is built in the main checkout.** Its uncommitted changes show in your editor's Source Control list like any other change, and the agent commits nothing while it builds. When the ticket closes, the agent commits the work, pushes it and resolves any conflict, then runs `flow tickets done`. A conflict it can't resolve leaves the ticket open, with a task line naming the files. `flow tickets start` makes no second copy of the code.
 
 **A git worktree, a second checkout of the code, exists only when you ask for one**, usually to build 2 tickets at once. The agent makes it with plain git, in `.claude/worktrees/<ticket name>/`, using the steps in `docs/context/worktrees.md` where the project has that page. The build ends with the edits uncommitted there. In your editor, turn on `git.detectWorktrees`, then reload the window once: each worktree shows as a repository of its own in Source Control. A worktree made later appears after one click on the list's refresh button. You merge it yourself: `util git save -w <name>` inside the worktree (or from the main checkout), which commits it, replays the work on top of the branch the main checkout has out, runs the project's check if one is set, moves that branch forward and pushes it. `util git save -w` alone lists the worktrees, and a plain `util git save` never merges one. It stops and says why on a conflict, on uncommitted edits in the main checkout to a file the merge changes, or on a failing check. The folder stays until the ticket is closed, when the agent removes it.
 

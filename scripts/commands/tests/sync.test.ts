@@ -232,6 +232,81 @@ function pair(name) {
 /** `flow` on machine `m`'s home tickets. */
 const inHome = (m, args) => run('flow.ts', args, { cwd: m.dir, env: { ...process.env, FLOW_HOME: m.at.flow, FLOW_PROJECT: m.root } });
 
+test('a project one machine only receives comes down there, never goes up from it, and refuses its writes', () => {
+  const { a, b } = pair('sync-receive');
+  // b only receives app. Its record says so, and the record travels.
+  repo.writeRecord(a.at);
+  const recordB = repo.writeRecord(b.at);
+  fs.writeFileSync(recordB, JSON.stringify({ ...JSON.parse(read(recordB)), receiveOnly: ['app'] }, null, 2) + '\n');
+  assert.strictEqual(sync(a).code, 0);
+  assert.strictEqual(sync(b).code, 0);
+  assert.strictEqual(sync(a).code, 0);
+
+  // a writes app's tickets through its clone's .flow link.
+  const appA = path.join(a.dir, 'app');
+  const recordsA = path.join(a.at.flow, 'projects', 'app');
+  fs.mkdirSync(path.join(recordsA, 'tickets'), { recursive: true });
+  fs.writeFileSync(path.join(recordsA, 'settings.json'), '{\n  "ticketPrefix": "exp",\n  "repository": "github.com/someone/app"\n}\n');
+  fs.mkdirSync(appA, { recursive: true });
+  fs.symlinkSync(recordsA, path.join(appA, '.flow'));
+  const inApp = (m, dir, args) => run('flow.ts', args, { cwd: dir, env: { ...process.env, FLOW_HOME: m.at.flow, FLOW_PROJECT: dir } });
+  assert.match(inApp(a, appA, ['tickets', 'new', 'Login page']).stdout, /created exp-1/);
+
+  // b gets it, and makes a home ticket of its own.
+  assert.strictEqual(sync(b).code, 0);
+  const ticketB = path.join(b.at.flow, 'projects', 'app', 'tickets', '1', 'ticket.md');
+  assert.match(read(ticketB), /title: login-page/);
+  const appB = path.join(b.dir, 'app');
+  fs.mkdirSync(appB, { recursive: true });
+  fs.symlinkSync(path.join(b.at.flow, 'projects', 'app'), path.join(appB, '.flow'));
+  assert.match(inHome(b, ['tickets', 'new', 'Dark mode']).stdout, /created home-1-dark-mode/);
+
+  // Every Flow write into app on b is refused, and writes nothing.
+  const words = `app's tickets are written on ${a.name}. This machine, ${b.name}, only receives them (machines/${b.name}.json → receiveOnly).`;
+  const before = read(ticketB);
+  for (const args of [['tickets', 'new', 'Export csv'], ['tickets', 'start', 'exp-1', '--activity', 'build']]) {
+    const refused = inApp(b, appB, args);
+    assert.strictEqual(refused.code, 1, args.join(' '));
+    assert.ok(refused.stderr.includes(words), refused.stderr);
+  }
+  assert.strictEqual(read(ticketB), before);
+  assert.strictEqual(git(b.at.flow, ['status', '--porcelain']).out, '', 'neither refusal wrote a file');
+
+  // A stray edit on b, by hand, of the line a edits too: kept back, never sent.
+  fs.appendFileSync(ticketB, 'from b\n');
+  fs.writeFileSync(path.join(b.at.flow, 'projects', 'app', 'stray note.md'), 'b\'s\n');
+  assert.strictEqual(repo.changed(b.at), null, 'nothing b may send changed');
+  fs.appendFileSync(path.join(recordsA, 'tickets', '1', 'ticket.md'), 'from a\n');
+  assert.strictEqual(sync(a).code, 0);
+
+  const synced = inApp(b, appB, ['sync', '--root', b.root]);
+  assert.strictEqual(synced.code, 0, synced.stderr);
+  assert.match(synced.stdout, /^came down: 1 file$/m);
+  assert.match(synced.stdout, /never sent, and set aside in git stash in .*, since this machine only receives them:\n {2}projects\/app\/tickets\/1\/ticket\.md\n {2}projects\/app\/stray note\.md\n/);
+  assert.strictEqual(read(ticketB), read(path.join(recordsA, 'tickets', '1', 'ticket.md')), 'app on b is what a sent');
+  assert.strictEqual(git(b.at.flow, ['status', '--porcelain']).out, '');
+  assert.strictEqual(git(b.at.flow, ['stash', 'list']).out.split('\n').length, 1);
+  const touched = git(b.at.flow, ['log', '--no-merges', '--format=%s', 'origin/main', '--', 'projects/app']).out.split('\n');
+  assert.ok(touched.length >= 2 && touched.every((s) => s.startsWith(`${a.name}:`)), touched.join('\n'));
+
+  // The next sync runs as any other, and a gets b's home ticket.
+  const again = sync(b);
+  assert.strictEqual(again.code, 0, again.stderr);
+  assert.doesNotMatch(again.stdout, /set aside/);
+  assert.strictEqual(sync(a).code, 0);
+  assert.match(inHome(a, ['tickets', 'get', 'home-1']).stdout, /Dark mode/);
+
+  // A hand `git mv` in app on b, staged, beside a file b does send: the
+  // rename is set aside whole, its old path named once, and only the file goes up.
+  assert.ok(git(b.at.flow, ['mv', 'projects/app/settings.json', 'projects/app/moved.json']).ok);
+  fs.writeFileSync(path.join(b.at.flow, 'from-b.md'), 'b\n');
+  const moved = sync(b);
+  assert.strictEqual(moved.code, 0, moved.stderr);
+  assert.match(moved.stdout, /only receives them:\n {2}projects\/app\/moved\.json\n(?! {2})/);
+  assert.ok(fs.existsSync(path.join(b.at.flow, 'projects', 'app', 'settings.json')));
+  assert.strictEqual(git(b.at.flow, ['log', '--no-merges', '-1', '--name-only', '--format=', 'origin/main']).out, 'from-b.md');
+});
+
 test('2 machines making a home ticket in the same minute: the second makes no ticket, and runs flow new again', () => {
   const { a, b } = pair('sync-claim');
 

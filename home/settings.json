@@ -219,7 +219,7 @@
     ]
   },
   "disableBundledSkills": true,
-  "disableRemoteControl": true,
+  "disableRemoteControl": false,
   "disableClaudeAiConnectors": true,
   "feedbackSurveyRate": 0,
   "disableArtifact": true,
@@ -244,11 +244,11 @@
       "Monitor"
     ],
     "ask": [
-      "Bash(git push *)",
-      "Bash(util git save *)",
-      "Bash(util g save *)",
-      "Bash(u git save *)",
-      "Bash(u g save *)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f *)",
+      "Bash(git push * -f)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
       "Bash(npm publish *)",
       "Bash(pnpm publish *)",
       "Bash(yarn publish *)",

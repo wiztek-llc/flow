@@ -43,7 +43,8 @@
  *                 them, and without a line here `flow sync` would send them
  *
  * Each machine keeps one record in the repository, `machines/<name>.json`:
- * its name and the day it joined. `flow install` sends it up the moment the
+ * its name, the day it joined, and the projects it only receives, which it
+ * never sends (receive-only.ts). `flow install` sends it up the moment the
  * machine joins, so a name is claimed before another machine can be offered
  * it.
  *
@@ -66,6 +67,7 @@ import { FlowError } from '../../shared/error.ts';
 import { git, gh, DURABLE } from '../../shared/git.ts';
 import * as tickets from '../tickets/records.ts';
 import * as store from '../tickets/store.ts';
+import * as receiveOnly from './receive-only.ts';
 
 /** The repository's name on the user's GitHub account. Never configurable. */
 const NAME = 'flow-home';
@@ -146,10 +148,13 @@ function identity(at) {
   return ['-c', `user.name=${name}`, '-c', `user.email=${name}@flow-home`];
 }
 
-/** Everything not committed, as `2 files` or null. */
+/** git's pathspec for everything this machine sends: all but the projects it only receives. */
+const sendable = (at) => ['--', '.', ...receiveOnly.listed(at).map((p) => `:(exclude)projects/${p}`)];
+
+/** Everything not committed that this machine sends, as `2 files` or null. */
 function changed(at) {
   if (!isRepo(at)) return null;
-  const status = git(at.flow, ['status', '--porcelain']);
+  const status = git(at.flow, ['status', '--porcelain', ...sendable(at)]);
   if (!status.ok || !status.out) return null;
   const count = status.out.split('\n').length;
   return `${count} file${count === 1 ? '' : 's'}`;
@@ -160,11 +165,14 @@ function changed(at) {
  * disk. git ignores only untracked files, so a line added after a file was
  * committed does nothing for that file. Only `.gitignore` is read, never
  * git's global excludes, which would untrack what the user's own setup hides.
+ * A project this machine only receives is left to the machine that writes it.
  */
 function untrackIgnored(at) {
   const listed = git(at.flow, ['ls-files', '-z', '--cached', '--ignored', '--exclude-from', path.join(at.flow, '.gitignore')]);
   if (!listed.ok || !listed.out) return;
-  const files = listed.out.split('\0').filter(Boolean);
+  const received = receiveOnly.listed(at).map((p) => `projects/${p}/`);
+  const files = listed.out.split('\0').filter((f) => f && !received.some((r) => f.startsWith(r)));
+  if (!files.length) return;
   const removed = git(at.flow, ['rm', '-q', '--cached', '--', ...files]);
   if (!removed.ok) throw new FlowError(`could not stop tracking what ${at.flow} ignores: ${removed.err}`);
 }
@@ -243,18 +251,26 @@ function fetch(at) {
 
 const recordFile = (at, name) => path.join(at.flow, 'machines', `${name}.json`);
 
-/** Write this machine's record: its name and the day it joined, kept from the record already there. */
+/**
+ * Write this machine's record: its name, and the day it joined kept from the
+ * record already there. Every other key the record holds, such as
+ * `receiveOnly`, is kept as it is.
+ */
 function writeRecord(at) {
   const name = nameOf(at);
   const file = recordFile(at, name);
-  let joined = new Date().toISOString().slice(0, 10);
+  let had: { [key: string]: unknown } = {};
   try {
-    joined = JSON.parse(fs.readFileSync(file, 'utf8')).joined || joined;
+    had = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch {
     // No record yet: this machine joins today.
   }
+  // Spread after, so the keys keep their places; name and joined are set again over it.
+  const record: { [key: string]: unknown } = { name, joined: '', ...had };
+  record.name = name;
+  record.joined = had.joined || new Date().toISOString().slice(0, 10);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ name, joined }, null, 2) + '\n');
+  fs.writeFileSync(file, JSON.stringify(record, null, 2) + '\n');
   return file;
 }
 
@@ -380,9 +396,13 @@ function seed(at) {
  * a number the remote already gave out is renumbered, `was:` kept where
  * `keepWas` says, so the fix goes up with everything else.
  *
- * Returns `{ came, sent, pushed, renumbered }`, or `rejected` and `why` where
- * another machine pushed between the fetch and the push. Every other failure
- * throws.
+ * A project this machine only receives is never committed. An edit made in
+ * it here anyway goes to `git stash` before the merge, so the folder comes out
+ * holding exactly what its writer sent.
+ *
+ * Returns `{ came, sent, pushed, renumbered, kept }`, `kept` being the paths
+ * stashed, or `rejected` and `why` where another machine pushed between the
+ * fetch and the push. Every other failure throws.
  */
 function sync(at, { roots = [], keepWas = true }: { roots?: string[]; keepWas?: boolean } = {}) {
   if (!isRepo(at)) throw new FlowError(`${at.flow} is not a repository yet. Run flow install, which connects it.`);
@@ -391,12 +411,15 @@ function sync(at, { roots = [], keepWas = true }: { roots?: string[]; keepWas?: 
   // the one a clash on a ticket number is judged against.
   const theirs = remote ? git(at.flow, ['rev-parse', '-q', '--verify', 'origin/main']).out || null : null;
 
+  // Set aside first: `git commit` takes the whole index, so a change staged
+  // by hand in a project this machine only receives would go up with the rest.
+  const kept = hasHead(at) ? keepBack(at) : [];
   untrackIgnored(at);
   const count = changed(at);
   let sent: string | null = null;
   if (count) {
     sent = `${nameOf(at)}: ${count}`;
-    const staged = git(at.flow, [...DURABLE, 'add', '-A']);
+    const staged = git(at.flow, [...DURABLE, 'add', '-A', ...sendable(at)]);
     if (!staged.ok) throw new FlowError(`could not stage ${at.flow}: ${staged.err}`);
     const made = git(at.flow, [...DURABLE, ...identity(at), 'commit', '-q', '-m', sent]);
     if (!made.ok) throw new FlowError(`could not commit ${at.flow}: ${made.err || made.out}`);
@@ -433,10 +456,46 @@ function sync(at, { roots = [], keepWas = true }: { roots?: string[]; keepWas?: 
     : Number(git(at.flow, ['rev-list', '--count', 'HEAD']).out || 0);
   if (unsent > 0) {
     const pushed = git(at.flow, ['push', '-q', 'origin', 'main']);
-    if (!pushed.ok && tickets.pushRefused(pushed.err)) return { rejected: true, why: pushed.err.split('\n')[0], renumbered };
+    if (!pushed.ok && tickets.pushRefused(pushed.err)) return { rejected: true, why: pushed.err.split('\n')[0], renumbered, kept };
     if (!pushed.ok) throw new FlowError(`committed here, and the push failed:\n  ${pushed.err.split('\n')[0]}`);
   }
-  return { came, sent, pushed: unsent, renumbered };
+  return { came, sent, pushed: unsent, renumbered, kept };
+}
+
+/**
+ * Move every uncommitted change in a project this machine only receives into
+ * `git stash`, one entry per project, and return the paths moved. Merged in
+ * place, an edit there would meet the writer's edit of the same file, and
+ * git's conflict markers would stop every later merge.
+ */
+function keepBack(at) {
+  const kept: string[] = [];
+  for (const project of receiveOnly.listed(at)) {
+    const spec = `projects/${project}`;
+    // -z, since porcelain quotes a path holding a space and git stash would miss it.
+    const status = git(at.flow, ['status', '--porcelain', '-z', '--untracked-files=all', '--', spec]);
+    if (!status.ok || !status.raw.replace(/\0/g, '').trim()) continue;
+    const message = `${nameOf(at)}: edits to ${spec}, which this machine only receives`;
+    const stashed = git(at.flow, [...identity(at), 'stash', 'push', '-q', '--include-untracked', '-m', message, '--', spec]);
+    if (!stashed.ok) throw new FlowError(`could not set aside the edits in ${spec}: ${stashed.err}`);
+    kept.push(...stashedPaths(status.raw));
+  }
+  return kept;
+}
+
+/**
+ * The paths in `git status --porcelain -z` output. A rename or copy prints
+ * its old path as a second entry with no status in front, `R  new\0old\0`,
+ * so that entry is skipped.
+ */
+function stashedPaths(raw: string) {
+  const entries = raw.split('\0').filter(Boolean);
+  const found: string[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    found.push(entries[i].slice(3));
+    if (/[RC]/.test(entries[i].slice(0, 2))) i++;
+  }
+  return found;
 }
 
 /**
@@ -453,11 +512,14 @@ function withLock(at, fn) {
  * `sync`, renumbering the tickets of ~/.flow/ and of `linked`, a project whose `.flow/` links into the Flow home. A ticket
  * reaches the remote through `claimTicket` before anyone sees its number, so
  * a clash here is one made before that rule, or with no remote: its old id is
- * kept as `was:`. Returns what `sync` does, and throws what it throws.
+ * kept as `was:`. A project this machine only receives is never renumbered
+ * here: its writer gives out its numbers. Returns what `sync` does, and throws
+ * what it throws.
  */
 function syncHome(at, linked: string | null = null) {
+  const own = linked && !receiveOnly.receivedAt(at, store.recordsDir(linked)) ? linked : null;
   return withLock(at, () => {
-    const result = sync(at, { roots: [at.flow, linked].filter((r): r is string => !!r) });
+    const result = sync(at, { roots: [at.flow, own].filter((r): r is string => !!r) });
     if (result.rejected) throw new FlowError(`committed here, and the push failed:\n  ${result.why}`);
     return result;
   });

@@ -20,6 +20,7 @@ export const GUIDES = [
   'edit-log.md',
   'wiki.md',
   'subagents.md',
+  'commit-on-close.md',
 ] as const
 export type Guide = (typeof GUIDES)[number]
 export const guides = (...names: Guide[]): Send[] => names.map((name) => ({ tool: 'Read', path: `references/guides/${name}` }))

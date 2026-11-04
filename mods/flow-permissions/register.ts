@@ -18,7 +18,9 @@ export const register: Register = (on) => {
   })
 
   // A hook that throws is skipped, and Claude Code's own prompt appears.
+  // Claude in Chrome keeps Claude Code's own prompt, which can allow a site for the session.
   on('tool.check', async ($, e, next) => {
+    if (e.tool.startsWith('mcp__claude-in-chrome__')) return next(e)
     const decided = await next(e)
     return decided.decision === 'ask' ? askUser($, e, decided) : decided
   }).catch(() => ({ decision: 'ask' as const }))

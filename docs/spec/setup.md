@@ -78,6 +78,9 @@ How Flow gets onto a machine and into a project, stays current, and shares the u
 - `V1` **`~/.flow/` is also sent in the background**, after a status move on a ticket, after a reply when something waits and the last send was 30 minutes ago or more, and at session end.
 - `V1` **What never travels** sits in `~/.flow/.gitignore`, opening `# What belongs to this machine alone.`: the links into the clone (`scripts`, `guides`, `docs`, `prompts`), `repos/`, `logs/`, `audit/`, `changes/`, `registry.json`, `settings.local.json` and every wiki `downloads/`. `flow install` writes the file on every run. `flow sync` untracks (`git rm --cached`) every committed file that file now names, since git ignores only untracked files. The file stays on disk. Another machine merging that commit loses its copy of the file, which only a path committed before its ignore line existed can cause. Decided at `fw-281`.
 - `V1` **A setting holding a path lives in `settings.local.json`**, which stays on its machine.
+- `V1` **A machine can only receive a project**, by listing it in its record: `"receiveOnly": ["hustle"]` in `machines/<name>.json`. There, `flow sync` brings the project's folder down and never commits it. An edit made in it anyway goes to `git stash` before anything is staged, and the sync prints its paths. The stash comes first because `git commit` takes the whole index, so a change staged there by hand would otherwise go up. Every Flow write into the folder is refused with the words `hustle's tickets are written on ubuntu. This machine, macbook-pro, only receives them (machines/macbook-pro.json → receiveOnly).`, and the guard denies Claude's Edit and Write there. A shell write is not stopped: the stash keeps it unsent. Decided 2026-11-04 at `home-11`, for a project whose tickets a server writes. The list sits in the record, since the record travels and so the refusal can name the writing machine.
+- `never` **Turning the sync hooks off on a machine that only receives a project**: they are global, so every other project would stop syncing. Dropped at `home-11`.
+- `never` **`git merge --autostash` for a stray edit in a received project**: where the writer changed the same file, git 2.54 applies the stash with conflict markers, and every later merge fails. Dropped at `home-11`.
 - `V1` **Uncommitted code travels by `util git uncommitted`**, on the user's own command. The agent never runs it.
 - `never` **A `~/.flow/private-scripts/` folder for the user's own scripts.** Dropped by the user 2026-10-02: such scripts are rare, and any folder in `~/.flow/` already reaches GitHub through `flow sync`.
 
@@ -94,6 +97,7 @@ How Flow gets onto a machine and into a project, stays current, and shares the u
 - **`scripts/commands/init.ts`**, **`project-template/`**: the project's setup and its scaffold.
 - **`scripts/commands/update.ts`**: the pull and the new install.
 - **`scripts/commands/sync.ts`**, **`scripts/features/machine/flow-repo.ts`**: `flow sync`, the Flow home, the machine records and the list of what never travels.
+- **`scripts/features/machine/receive-only.ts`**: the projects a machine only receives, and the refusal's words, used by the sync, the ticket store, the group cards and the guard.
 - **`scripts/commands/doctor.ts`**: the checks.
 - **`scripts/features/machine/`**: the links, the machine's name, the prerequisites, `MIN_NODE` and `MIN_CLAUDE`, and the owed setup session.
 - **`scripts/shared/registry.ts`**: the registry.
@@ -105,6 +109,12 @@ A machine's record in the Flow home, `machines/pc-wsl.json`:
 
 ```json
 { "name": "pc-wsl", "joined": "2026-10-05" }
+```
+
+A machine that only receives a project lists it:
+
+```json
+{ "name": "macbook-pro", "joined": "2026-10-18", "receiveOnly": ["hustle"] }
 ```
 
 The marker `~/.flow/logs/setup-pending` exists while a setup session is owed, and `flow doctor` and the next `flow install` read it.
@@ -126,6 +136,7 @@ The marker `~/.flow/logs/setup-pending` exists while a setup session is owed, an
 - **The repository is not a Flow home, or a download would overwrite a local file** → refused before anything links.
 - **The setup session quit halfway** → the marker stays, and the next `flow install` or `flow update` opens the session again.
 - **A merge git cannot finish** → aborted, naming the files, this machine's commit kept.
+- **A Flow write into a project this machine only receives** → refused, naming the machine that writes it, nothing written.
 - **A pull git refuses during `flow update`** → stops with git's message.
 - **A link someone replaced with a real file or folder** → `flow install` refuses to replace it.
 

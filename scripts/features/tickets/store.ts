@@ -29,6 +29,7 @@ import * as ticketHistory from './ticket-history.ts';
 import * as settings from '../../shared/settings.ts';
 import { FlowError } from '../../shared/error.ts';
 import * as paths from '../../shared/paths.ts';
+import * as receiveOnly from '../machine/receive-only.ts';
 import type { Ticket, TicketList } from './types.ts';
 import { HOME_WORD, offerWord, badWord, normalizeId, wordOf, idNumber, byId, idOfFolder, idOfRef, folderName, storedId, toIdList } from './ids.ts';
 import { toLabelList, toRank, now } from './fields.ts';
@@ -97,6 +98,13 @@ const ticketsDir = (root) => path.join(recordsDir(root), 'tickets');
 const archiveDir = (root) => path.join(recordsDir(root), 'tickets', ARCHIVE);
 
 /**
+ * Throws where `dir` sits in a project this machine only receives
+ * (features/machine/receive-only.ts): another machine writes its tickets, and
+ * an edit made here would never be sent. Every write below calls it first.
+ */
+const refuseReceived = (dir: string) => receiveOnly.refuse(paths.folders(), dir);
+
+/**
  * The highest number this place ever gave out, committed with the tickets so
  * every clone shares it. The tickets on disk cannot say it: a ticket deleted,
  * moved away or taken back would free its number, and the next one would
@@ -118,6 +126,7 @@ function readCounter(root) {
 function countNumber(root, id) {
   const n = idNumber(id);
   if (n <= readCounter(root)) return;
+  refuseReceived(recordsDir(root));
   fs.mkdirSync(recordsDir(root), { recursive: true });
   fs.writeFileSync(counterFile(root), `${n}\n`);
 }
@@ -227,6 +236,7 @@ function nextId(tickets, prefix = tickets.prefix, counter = tickets.counter || 0
 /** Writes the file, relocating the folder first if the status changed bucket.
  *  Returns { from, to } when it moved, otherwise null. */
 function writeTicket(t) {
+  refuseReceived(t.dir);
   const moved = relocate(t);
   fs.writeFileSync(t.file, frontmatter.stringify(storedData(t), TICKET_KEYS, t.body));
   return moved;
@@ -252,6 +262,8 @@ function relocate(t) {
  * another disk, and a rename across disks throws EXDEV.
  */
 function moveFolder(from, to) {
+  refuseReceived(from);
+  refuseReceived(to);
   try {
     fs.renameSync(from, to);
   } catch (err: any) {
@@ -295,6 +307,8 @@ function setStatus(t, status, reason = '', activity = '') {
  * links between them follow.
  */
 function move(t, target, id, renamed) {
+  refuseReceived(t.dir);
+  refuseReceived(recordsDir(target));
   const parent = TERMINAL_STATUSES.includes(t.data.status) ? archiveDir(target) : ticketsDir(target);
   const folder = path.join(parent, folderName(id, labelOf(t)));
   if (fs.existsSync(folder)) throw new FlowError(`${folder} already exists.`);
@@ -315,6 +329,7 @@ function move(t, target, id, renamed) {
  * made before the counter existed would otherwise free its number.
  */
 function remove(t) {
+  refuseReceived(t.dir);
   if (t.root) countNumber(t.root, t.id);
   fs.rmSync(t.dir, { recursive: true, force: true });
 }
@@ -334,6 +349,7 @@ function renumber(root, onRemote, { keepWas = true } = {}) {
   for (const t of tickets) byId.set(t.id, [...(byId.get(t.id) || []), t]);
   const clashes = [...byId.values()].filter((list) => list.length > 1);
   if (!clashes.length) return [];
+  refuseReceived(recordsDir(root));
 
   const remote = onRemote();
   const local = tickets.filter((t) => !remote.has(t.dirName));
@@ -376,6 +392,7 @@ function renumber(root, onRemote, { keepWas = true } = {}) {
 const historyFile = (t) => path.join(t.dir, 'history.md');
 
 function appendHistory(t, line) {
+  refuseReceived(t.dir);
   fs.appendFileSync(historyFile(t), `${line}\n`);
 }
 
@@ -393,6 +410,7 @@ function readHistory(t) {
  * thousand tickets a second scan is the most expensive thing a command does.
  */
 function createTicket(root, { title, description, labels, parent, deps, tickets, body: given }: { title: string; description?: string; labels?: any; parent?: any; deps?: any; tickets?: TicketList; body?: string }) {
+  refuseReceived(recordsDir(root));
   const id = nextId(tickets || readTickets(root), prefixOf(root));
   const dir = path.join(ticketsDir(root), folderName(id));
   if (fs.existsSync(dir)) throw new FlowError(`${dir} already exists.`);

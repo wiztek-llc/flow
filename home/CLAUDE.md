@@ -74,7 +74,7 @@ One phase at a time:
   - Anything drawn: structure, architecture, layout, density, hierarchy, colour → `/flow:visualize`
 - **`user-only-skills`** Suggest `/flow:start`, `/flow:tickets-from-spec`, `/flow:triggers-check` and `/flow:upkeep` to the user.
 - **`skip-a-step`** Skip a Flow step that makes the work worse. Name the step and the reason. Never ask first.
-- **`never-commit-unasked`** Never commit, push or suggest either. Done means the changes sit uncommitted: the user reviews them in the editor's Source Control list and runs `util git save`. Asked to commit → `util git save "<ticket name>"`, which pushes in the same step. A commit left unpushed is half a save.
+- **`commit-on-close`** Closing a ticket commits its work and pushes it first, conflicts settled, then `flow tickets done`. The mod sends the guide. Otherwise never commit unasked. A commit left unpushed is half a save.
 
 ## Capture
 

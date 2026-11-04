@@ -23,7 +23,7 @@ The worktree shares everything outside its folder: a database, a port, a cache, 
 
 ## Ending the build
 
-Run the full suite in the worktree, leave the edits uncommitted, and report. Commit nothing, merge nothing, suggest neither. The worktree shows in Source Control as a repository section of its own, after one click on the list's refresh button.
+Run the full suite in the worktree, leave the edits uncommitted, and report. Closing the ticket merges it by `## Merging by hand` (`commit-on-close.md`). Before that, commit nothing. The worktree shows in Source Control as a repository section of its own, after one click on the list's refresh button.
 
 The main checkout holds uncommitted edits (`git status --short` there) → add one line to the report: their files next to the worktree's, and any that import or call each other. Git cannot see that dependency, and the user decides.
 
@@ -37,7 +37,7 @@ A project sets the check once: `git config util.saveCheck "<command>"`, one shel
 
 ## Merging by hand
 
-Only when the user asks the agent to merge. In this order. A conflict or a failing check stops the merge and reports.
+When the ticket closes, or the user asks the agent to merge. In this order. A conflict or a failing check stops the merge and reports.
 
 1. In the worktree: `git add -A`, then `git commit -m "<ticket name>"`.
 2. `git log --oneline <branch>..main`. Open a diff or `flow tickets get <id>` only for a subject that touches the ticket's area.
@@ -51,7 +51,7 @@ Never `git checkout -f` or `git reset --hard` in the main checkout. Never commit
 
 ## Closing
 
-The work is merged, by the user or by hand, and the user says the ticket is done.
+The work is merged, by the user or by hand.
 
 1. `flow tickets done <id>`. It refuses while the worktree holds uncommitted or unmerged work.
 2. `ExitWorktree` if the session stands in the folder. Then `git worktree remove <folder>` and `git branch -d <branch>`. Check: `git worktree list` shows only the main checkout.

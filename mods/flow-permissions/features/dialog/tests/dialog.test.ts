@@ -50,6 +50,16 @@ function claudeCode(on: Parameters<typeof mock.env>[0], core: Record<string, unk
 const PUSH = { command: 'git push origin main' }
 const GUARD_ASK = { decision: 'ask', reason: 'Push to origin/main', hook: 'PreToolUse' }
 
+describe('an ask from Claude in Chrome', () => {
+  test('passes to Claude Code\'s own prompt, with no dialog and no log line', async ($, on) => {
+    const seen = claudeCode(on, { decision: 'ask', reason: 'Claude wants to visit example.com' }, 'Allow')
+    const result = await $.tool.check({ tool: 'mcp__claude-in-chrome__navigate', input: { url: 'https://example.com' } })
+    expect(result).toMatchObject({ decision: 'ask' })
+    expect(seen.asks).toHaveLength(0)
+    expect(seen.lines).toHaveLength(0)
+  })
+})
+
 describe('an ask the guard raised', () => {
   test('Allow runs the call, asks with the sentence alone, and logs it', async ($, on) => {
     const seen = claudeCode(on, GUARD_ASK, 'Allow')

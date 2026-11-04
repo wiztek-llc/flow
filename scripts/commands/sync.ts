@@ -47,13 +47,17 @@ actions.sync = {
       syncProject();
       throw e;
     }
-    const { came, sent, pushed, renumbered } = result;
+    const { came, sent, pushed, renumbered, kept } = result;
     failures.cleared(at.flow, 'sync ~/.flow');
     out(came ? `came down: ${came} file${came === 1 ? '' : 's'}` : 'nothing new came down.');
     if (sent) out(`went up: ${sent}`);
     else if (pushed) out(`went up: ${pushed} commit${pushed === 1 ? '' : 's'} an earlier sync could not send`);
     else out('nothing changed here, so nothing went up.');
     for (const r of renumbered) out(`  ${r.from} is now ${r.to}: another machine took ${r.from} first.`);
+    if (kept.length) {
+      out(`never sent, and set aside in git stash in ${paths.shorten(at.flow)}, since this machine only receives them:`);
+      for (const file of kept) out(`  ${file}`);
+    }
     return syncProject();
   },
 };

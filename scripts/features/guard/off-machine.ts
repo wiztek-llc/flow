@@ -1,6 +1,6 @@
 /**
- * Harm 2, sending things off the machine: curl or wget sending data, a copy
- * to another host, ssh.
+ * Harm 2, sending things off the machine: curl or wget sending data, an rsync
+ * or sftp to another host. A plain ssh or scp runs unasked.
  */
 
 import { literal, expand, positionals, flagValue, rsyncDestination } from './words.ts';
@@ -43,16 +43,11 @@ function network({ program, args }, ctx) {
     const host = offMachine(args, ctx);
     if (host) return `Send data to ${host}`;
   }
-  if (program === 'scp') {
-    const dest = positionals(args, new Set(['-P', '-i', '-o', '-F', '-c', '-l', '-S', '-J'])).pop();
-    if (dest && remoteSpec(dest)) return `Copy files to ${hostOf(dest)}`;
-  }
   if (program === 'rsync') {
     const dest = rsyncDestination(args);
     if (dest && remoteSpec(dest)) return `Sync files to ${hostOf(dest)}`;
   }
   if (program === 'sftp') return 'Open a file transfer to another machine';
-  if (program === 'ssh' && !r.every((t) => t === '-V' || t === '-G')) return 'Connect to another machine · ssh';
   return null;
 }
 

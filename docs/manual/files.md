@@ -93,7 +93,7 @@ Your Flow home: the folder where Flow keeps your rules, notes, settings and tick
 - **`CLAUDE.md`**: your rules. `~/.claude/CLAUDE.md` links to it. It starts from Flow's template and is yours after that.
 - **`skill-overlays/<skill>.md`**: lines you add to a skill, such as `execute.md` for `/flow:execute`. A hook adds the file to the agent's context each time the skill loads, in every project. A fact true for one project belongs in that project's `CLAUDE.md`.
 - **`settings.json`** and **`settings.local.json`**: Flow's settings. [Settings](settings.md) covers every key.
-- **`machines/<name>.json`**: one record per computer sharing this Flow home, saying when it joined: `{ "name": "macbook-pro", "joined": "2026-09-27" }`.
+- **`machines/<name>.json`**: one record per computer sharing this Flow home, saying when it joined: `{ "name": "macbook-pro", "joined": "2026-09-27" }`. Add `"receiveOnly": ["shop"]` by hand where another computer, such as a server, writes a project's tickets. This computer then gets the project's tickets by `flow sync` and never sends them. Flow refuses to write them here, naming the computer that does.
 - **`registry.json`**: the projects on this computer, one line each, prefix and folder: `{ "exp": "/home/me/code/expense", "shop": "/home/me/code/shop" }`. `flow init` adds a project, and so does the first command that writes a ticket in a project that arrived with `.flow/`, such as a clone. A prefix is held by one folder: `flow init` refuses a taken one. `flow doctor` reads the file. A folder path differs on each computer, so the file stays on this one.
 - **`README.md`** and **`.gitignore`**: a warning for anyone opening the repository on GitHub, and the list of what stays on this computer.
 

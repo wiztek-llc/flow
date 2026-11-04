@@ -26,6 +26,11 @@
  *
  * Otherwise it stays silent and the call runs. It never answers "allow".
  *
+ * One call it denies outright: an Edit or Write into a project this machine
+ * only receives, with the words naming the machine that writes it
+ * (`features/machine/receive-only.ts`). No yes of the user's would get that
+ * edit sent, so asking would only lose it later.
+ *
  * It fails closed: any throw, a failed require included, answers "ask". That
  * answer is printed without `shared/hook`, since that file may be what failed.
  *
@@ -52,7 +57,17 @@ async function main() {
   if (tool === 'Read') {
     if (typeof input.file_path === 'string') reason = secretRead(input.file_path, cwd, world());
   } else if (tool === 'Edit' || tool === 'Write') {
-    if (typeof input.file_path === 'string') reason = judgeFileWrite(input.file_path, cwd, world());
+    if (typeof input.file_path === 'string') {
+      const path = await import('node:path');
+      const { folders } = await import('../shared/paths.ts');
+      const { refusal } = await import('../features/machine/receive-only.ts');
+      const received = refusal(folders(), path.resolve(cwd, input.file_path));
+      if (received) {
+        hook.answer('PreToolUse', { permissionDecision: 'deny', permissionDecisionReason: received });
+        return;
+      }
+      reason = judgeFileWrite(input.file_path, cwd, world());
+    }
   } else if (typeof input.command === 'string' && input.command.trim()) {
     reason = judge(input.command, cwd, world());
   }
